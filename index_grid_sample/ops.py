@@ -61,8 +61,8 @@ def _get_plugin():
 
     # List of sources.
     source_files = [
-        "src/segment_grid_sample.cu",
-        "src/segment_grid_sample.cpp",
+        "src/index_grid_sample.cu",
+        "src/index_grid_sample.cpp",
     ]
 
     # Some containers set this to contain old architectures that won't compile. We only need the one installed in the machine.
@@ -72,7 +72,7 @@ def _get_plugin():
     try:
         lock_fn = os.path.join(
             torch.utils.cpp_extension._get_build_directory(
-                "segment_grid_sample_plugin", False
+                "index_grid_sample_plugin", False
             ),
             "lock",
         )
@@ -84,7 +84,7 @@ def _get_plugin():
     # Compile and load.
     source_paths = [os.path.join(os.path.dirname(__file__), fn) for fn in source_files]
     torch.utils.cpp_extension.load(
-        name="segment_grid_sample_plugin",
+        name="index_grid_sample_plugin",
         sources=source_paths,
         extra_cflags=c_flags,
         extra_cuda_cflags=cuda_flags,
@@ -94,21 +94,21 @@ def _get_plugin():
     )
 
     # Import, cache, and return the compiled module.
-    import segment_grid_sample_plugin
+    import index_grid_sample_plugin
 
-    _cached_plugin = segment_grid_sample_plugin
+    _cached_plugin = index_grid_sample_plugin
     return _cached_plugin
 
 
-class _segment_grid_sample_2d(torch.autograd.Function):
+class _index_grid_sample_2d(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, input, grid, mode, padding_mode, align_corners):
+    def forward(ctx, input, grid, indices, mode, padding_mode, align_corners):
 
-        out = _get_plugin().segment_grid_sampler_2d_cuda(
-            input, grid, mode, padding_mode, align_corners
+        out = _get_plugin().index_grid_sampler_2d_cuda(
+            input, grid, indices, mode, padding_mode, align_corners
         )
 
-        ctx.save_for_backward(input, grid)
+        ctx.save_for_backward(input, grid, indices)
         ctx.mode = mode
         ctx.padding_mode = padding_mode
         ctx.align_corners = align_corners
@@ -118,45 +118,35 @@ class _segment_grid_sample_2d(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
 
-        input, grid = ctx.saved_variables
+        input, grid, indices = ctx.saved_variables
         mode = ctx.mode
         padding_mode = ctx.padding_mode
         align_corners = ctx.align_corners
         output_mask = (ctx.needs_input_grad[1], ctx.needs_input_grad[2])
 
-        grad_input, grad_grid = _get_plugin().segment_grid_sampler_2d_backward_cuda(
+        grad_input, grad_grid = _get_plugin().index_grid_sampler_2d_backward_cuda(
             grad_output,
             input,
             grid,
+            indices,
             mode,
             padding_mode,
             align_corners,
             output_mask,
         )
 
-        return grad_input, grad_grid, None, None, None
+        return grad_input, grad_grid, None, None, None, None
 
 
-def segment_grid_sample_2d(
-    input, grid, mode="bilinear", padding_mode="zeros", align_corners=True
-):
-    # input: [N, 3]
-
-    mode = ["bilinear", "nearest", "bicubic"].index(mode)
-    padding_mode = ["zeros", "border", "reflection"].index(padding_mode)
-
-    return _segment_grid_sample_2d.apply(input, grid, mode, padding_mode, align_corners)
-
-
-class _segment_grid_sample_3d(torch.autograd.Function):
+class _index_grid_sample_3d(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, input, grid, mode, padding_mode, align_corners):
+    def forward(ctx, input, grid, indices, mode, padding_mode, align_corners):
 
-        out = _get_plugin().segment_grid_sampler_3d_cuda(
-            input, grid, mode, padding_mode, align_corners
+        out = _get_plugin().index_grid_sampler_3d_cuda(
+            input, grid, indices, mode, padding_mode, align_corners
         )
 
-        ctx.save_for_backward(input, grid)
+        ctx.save_for_backward(input, grid, indices)
         ctx.mode = mode
         ctx.padding_mode = padding_mode
         ctx.align_corners = align_corners
@@ -166,31 +156,109 @@ class _segment_grid_sample_3d(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
 
-        input, grid = ctx.saved_variables
+        input, grid, indices = ctx.saved_variables
         mode = ctx.mode
         padding_mode = ctx.padding_mode
         align_corners = ctx.align_corners
         output_mask = (ctx.needs_input_grad[1], ctx.needs_input_grad[2])
 
-        grad_input, grad_grid = _get_plugin().segment_grid_sampler_3d_backward_cuda(
+        grad_input, grad_grid = _get_plugin().index_grid_sampler_3d_backward_cuda(
             grad_output,
             input,
             grid,
+            indices,
             mode,
             padding_mode,
             align_corners,
             output_mask,
         )
 
-        return grad_input, grad_grid, None, None, None
+        return grad_input, grad_grid, None, None, None, None
 
 
-def segment_grid_sample_3d(
-    input, grid, mode="bilinear", padding_mode="zeros", align_corners=True
+def index_grid_sample_2d(
+    input, grid, indices, mode="bilinear", padding_mode="zeros", align_corners=True
 ):
-    # input: [N, 3]
+    # input: [B, C, H, W], float
+    # grid: [..., 2], float
+    # indices: [..., 1], long, the batch id for each point in grid
+    # return: [..., C]
 
     mode = ["bilinear", "nearest", "bicubic"].index(mode)
     padding_mode = ["zeros", "border", "reflection"].index(padding_mode)
 
-    return _segment_grid_sample_3d.apply(input, grid, mode, padding_mode, align_corners)
+    # assert indices.max() < input.shape[0]
+
+    prefix = grid.shape[:-1]
+    grid = grid.contiguous().view(-1, 2)
+    indices = indices.long().contiguous().view(-1, 1)
+
+    output = _index_grid_sample_2d.apply(
+        input, grid, indices, mode, padding_mode, align_corners
+    )
+
+    output = output.view(*prefix, input.shape[1])
+
+    return output
+
+
+def index_grid_sample_3d(
+    input, grid, indices, mode="bilinear", padding_mode="zeros", align_corners=True
+):
+
+    mode = ["bilinear", "nearest", "bicubic"].index(mode)
+    padding_mode = ["zeros", "border", "reflection"].index(padding_mode)
+
+    # assert indices.max() < input.shape[0]
+
+    prefix = grid.shape[:-1]
+    grid = grid.contiguous().view(-1, 3)
+    indices = indices.long().contiguous().view(-1, 1)
+
+    output = _index_grid_sample_3d.apply(
+        input, grid, indices, mode, padding_mode, align_corners
+    )
+
+    output = output.view(*prefix, input.shape[1])
+
+    return output
+
+
+def index_grid_sample(
+    input, grid, indices, mode="bilinear", padding_mode="zeros", align_corners=True
+):
+    if grid.shape[-1] == 2:
+        return index_grid_sample_2d(
+            input, grid, indices, mode, padding_mode, align_corners
+        )
+    elif grid.shape[-1] == 3:
+        return index_grid_sample_3d(
+            input, grid, indices, mode, padding_mode, align_corners
+        )
+    else:
+        raise NotImplementedError(
+            "Only 2D and 3D are supported for index_grid_sample()!"
+        )
+
+
+class _segment_to_indices(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, segment, max_index=None):
+        # segment: [N, 2], long, each represents a segment by (offset, count)
+        # max_index: max index value, if None, will be inferred from segment
+
+        segment = segment.contiguous()
+        N = segment.shape[0]
+
+        if max_index is None:
+            max_index = segment.sum(dim=1).max().item()
+
+        indices = torch.zeros(max_index, dtype=torch.long, device=segment.device)
+
+        _get_plugin().segment_to_indices(segment, N, max_index, indices)
+
+        return indices
+
+
+def segment_to_indices(segment, max_index=None):
+    return _segment_to_indices.apply(segment, max_index)
