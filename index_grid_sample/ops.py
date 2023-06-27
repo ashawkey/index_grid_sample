@@ -241,24 +241,24 @@ def index_grid_sample(
         )
 
 
-class _segment_to_indices(torch.autograd.Function):
+class _segments_to_indices(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, segment, max_index=None):
-        # segment: [N, 2], long, each represents a segment by (offset, count)
-        # max_index: max index value, if None, will be inferred from segment
+    def forward(ctx, segments, max_index=None):
+        # segments: [N, 2], long, each represents a segment by (offset, count)
+        # max_index: max index value, if None, will be inferred from segments
 
-        segment = segment.contiguous()
-        N = segment.shape[0]
+        segments = segments.long().contiguous()
+        N = segments.shape[0]
 
         if max_index is None:
-            max_index = segment.sum(dim=1).max().item()
+            max_index = segments.sum(dim=1).max().item()
 
-        indices = torch.zeros(max_index, dtype=torch.long, device=segment.device)
+        indices = torch.zeros(max_index, dtype=torch.long, device=segments.device)
 
-        _get_plugin().segment_to_indices(segment, N, max_index, indices)
+        _get_plugin().segments_to_indices(segments, N, max_index, indices)
 
         return indices
 
 
-def segment_to_indices(segment, max_index=None):
-    return _segment_to_indices.apply(segment, max_index)
+def segments_to_indices(segments, max_index=None):
+    return _segments_to_indices.apply(segments, max_index)

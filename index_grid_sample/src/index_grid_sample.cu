@@ -717,7 +717,7 @@ namespace {
     }
     }
 
-    __global__ void segment_to_indices_kernel(
+    __global__ void segments_to_indices_kernel(
         TensorInfo<int64_t, int64_t> segments,
         const int64_t N, const int64_t M,
         TensorInfo<int64_t, int64_t> indices
@@ -937,8 +937,8 @@ void launch_index_grid_sampler_3d_backward_kernel(
     }
 }
 
-void launch_segment_to_indices_kernel(const TensorBase &segments, const int64_t N, const int64_t M, TensorBase &indices) {
-    segment_to_indices_kernel<<<GET_BLOCKS(N, 256), 256, 0, at::cuda::getCurrentCUDAStream()>>>(
+void launch_segments_to_indices_kernel(const TensorBase &segments, const int64_t N, const int64_t M, TensorBase &indices) {
+    segments_to_indices_kernel<<<GET_BLOCKS(N, 256), 256, 0, at::cuda::getCurrentCUDAStream()>>>(
         getTensorInfo<int64_t, int64_t>(segments),
         N,
         M,

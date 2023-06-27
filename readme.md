@@ -25,7 +25,7 @@ pip install .
 
 import torch
 
-from index_grid_sample import index_grid_sample, segment_to_indices
+from index_grid_sample import index_grid_sample, segments_to_indices
 
 B = 2 # batch size of input
 C = 3 # feature channels
@@ -43,6 +43,6 @@ results = index_grid_sample(input, grid, indices, mode="bilinear", padding_mode=
 ### we also provide a helper function to convert segments to indices
 # segments are defined as [B, 2], each entry is (offset, length) per batch
 segments = torch.tensor([[0, 3], [5, 1], [3, 2]], dtype=torch.long, device='cuda')
-indices = segment_to_indices(segments)
+indices = segments_to_indices(segments)
 # indices == [0, 0, 0, 2, 2, 1]
 ```

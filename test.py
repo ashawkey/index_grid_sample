@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 import time
 
-from index_grid_sample import index_grid_sample, segment_to_indices
+from index_grid_sample import index_grid_sample, segments_to_indices
 
 # 2d
 input = torch.rand(2, 3, 1024, 1024, dtype=torch.float32, device="cuda")
@@ -17,7 +17,7 @@ gt_indices = torch.cat(
 )
 
 segments = torch.tensor([[0, 1024], [1024, 1024]], dtype=torch.long, device="cuda")
-indices = segment_to_indices(segments).view(2, 1, 1024, 1)
+indices = segments_to_indices(segments).view(2, 1, 1024, 1)
 
 print(torch.allclose(gt_indices, indices))
 

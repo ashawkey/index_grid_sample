@@ -67,8 +67,8 @@ index_grid_sampler_3d_backward_cuda(const Tensor& grad_output, const Tensor& inp
   return std::make_tuple(grad_input, grad_grid);
 }
 
-void segment_to_indices(const Tensor& segments, const int64_t N, const int64_t M, Tensor &indices) {
-  launch_segment_to_indices_kernel(segments, N, M, indices);
+void segments_to_indices(const Tensor& segments, const int64_t N, const int64_t M, Tensor &indices) {
+  launch_segments_to_indices_kernel(segments, N, M, indices);
 }
 
 } // namespace at::native
@@ -80,6 +80,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("index_grid_sampler_3d_cuda", &at::native::index_grid_sampler_3d_cuda);
   m.def("index_grid_sampler_2d_backward_cuda", &at::native::index_grid_sampler_2d_backward_cuda);
   m.def("index_grid_sampler_3d_backward_cuda", &at::native::index_grid_sampler_3d_backward_cuda);
-  m.def("segment_to_indices", &at::native::segment_to_indices);
+  m.def("segments_to_indices", &at::native::segments_to_indices);
 }
 
